@@ -105,3 +105,26 @@ def test_delete_account():
     requests.post(f"{BASE}/api/content", json={"type": "text", "title": "t", "source": "x"}, headers=h)
     assert requests.delete(f"{BASE}/api/users/me", headers=h).status_code == 204
     assert requests.post(f"{BASE}/api/auth/login", json={"email": email, "password": "Secret123!"}).status_code == 401
+
+
+def test_growth_garden_journal_badges():
+    import time
+    _, h = new_user()
+    cid = requests.post(f"{BASE}/api/content", json={"type": "youtube", "title": "גדילה", "source": YT, "bed": "מדע"}, headers=h).json()["id"]
+    sid = requests.post(f"{BASE}/api/sessions", json={"content_id": cid}, headers=h).json()["id"]
+    last = None
+    for sc in (0.9, 0.9, 0.2, 0.9):
+        time.sleep(1.1)
+        last = requests.post(f"{BASE}/api/sessions/{sid}/readings", json={"position": 1, "score": sc, "attention": [0.01] * 100}, headers=h).json()
+    assert {"level", "stage", "blooms", "focused_seconds"} <= set(last)
+    assert 2.5 < last["focused_seconds"] < 4.5  # the 0.2 reading did not count as focus
+    end = requests.post(f"{BASE}/api/sessions/{sid}/end", headers=h).json()
+    assert end["species"] == "sunflower"
+    g = requests.get(f"{BASE}/api/garden", headers=h).json()
+    assert g["total_plants"] == 1 and g["beds"][0]["name"] == "מדע" and g["beds"][0]["plants"][0]["session_id"] == sid
+    j = requests.get(f"{BASE}/api/journal?tz_offset=-120", headers=h).json()
+    assert len(j["minutes_by_day"]) == 14 and j["by_bed"][0]["name"] == "מדע" and j["tips"]
+    assert len(j["attention_strips"][0]["weights"]) == 100
+    b = requests.get(f"{BASE}/api/badges", headers=h).json()
+    assert b["season"]["name"] and any(x["id"] == "first_seed" and x["earned"] for x in b["badges"])
+    assert requests.get(f"{BASE}/api/garden").status_code == 401

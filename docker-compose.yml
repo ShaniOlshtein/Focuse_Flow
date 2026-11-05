@@ -18,6 +18,7 @@ services:
     environment:
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017}
       DB_NAME: ${DB_NAME:-focusflow}
+      BLOOM_STEP_SECONDS: ${BLOOM_STEP_SECONDS:-120}
     ports:
       - "8000:8000"
     depends_on:

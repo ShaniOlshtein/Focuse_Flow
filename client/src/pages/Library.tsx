@@ -104,8 +104,11 @@ export default function Library() {
           </label>
           <label>
             ערוגה / נושא (לא חובה)
-            <input value={form.bed} maxLength={40} placeholder="למשל: היסטוריה"
+            <input value={form.bed} maxLength={40} placeholder="למשל: היסטוריה" list="beds"
               onChange={(e) => setForm({ ...form, bed: e.target.value })} />
+            <datalist id="beds">
+              {[...new Set((items ?? []).map((c) => c.bed).filter(Boolean))].map((b) => <option key={b!} value={b!} />)}
+            </datalist>
           </label>
           {error && <p className="alert error" role="alert">{error}</p>}
           {msg && <p className="alert ok" role="status">{msg}</p>}

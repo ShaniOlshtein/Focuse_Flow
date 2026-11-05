@@ -14,3 +14,4 @@ client/certs/*.crt
 client/public/mediapipe/wasm/
 client/public/ort/
 *.jpg
+e2e/screens/

@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError, Content, TYPE_LABEL } from "../api";
 import { NotFound } from "../App";
-import SessionPanel from "../focus/SessionPanel";
+import FocusPanel from "../focus/FocusPanel";
+import { Species } from "../bloom/Plant";
 import YouTubePlayer, { PlayerHandle } from "../focus/YouTubePlayer";
+
+const SPECIES: Record<Content["type"], Species> = { youtube: "sunflower", text: "fern", web: "cactus" };
 
 export default function ContentView() {
   const { id } = useParams();
@@ -74,7 +77,8 @@ export default function ContentView() {
             </>
           )}
         </section>
-        <SessionPanel contentId={item.id} hooks={{ getPosition }} />
+        <FocusPanel contentId={item.id} species={SPECIES[item.type]}
+          hooks={{ getPosition, pause: item.type === "youtube" ? () => player.current?.pause() : undefined }} />
       </div>
     </div>
   );

@@ -6,7 +6,10 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Library from "./pages/Library";
 import ContentView from "./pages/ContentView";
-import { HistoryDetail, HistoryList } from "./pages/History";
+import { HistoryDetail } from "./pages/History";
+import Garden from "./pages/Garden";
+import JournalPage from "./pages/Journal";
+import Profile from "./pages/Profile";
 
 export function Logo() {
   return (
@@ -26,7 +29,8 @@ function Shell({ children }: { children: ReactNode }) {
         <Logo />
         <nav className="mainnav" aria-label="ניווט ראשי">
           <NavLink to="/library">הספרייה</NavLink>
-          <NavLink to="/history">היסטוריה</NavLink>
+          <NavLink to="/history">הגינה שלי · היסטוריה</NavLink>
+          <NavLink to="/journal">יומן הגינה</NavLink>
           <NavLink to="/profile">פרופיל</NavLink>
         </nav>
         <div className="userbox">
@@ -71,13 +75,6 @@ export function NotFound() {
   );
 }
 
-const Soon = ({ title }: { title: string }) => (
-  <div className="card center-card">
-    <h1>{title}</h1>
-    <p className="muted">בקרוב.</p>
-  </div>
-);
-
 export default function App() {
   return (
     <Routes>
@@ -86,9 +83,10 @@ export default function App() {
       <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
       <Route path="/library" element={<Protected><Library /></Protected>} />
       <Route path="/content/:id" element={<Protected><ContentView /></Protected>} />
-      <Route path="/history" element={<Protected><HistoryList /></Protected>} />
+      <Route path="/history" element={<Protected><Garden /></Protected>} />
+      <Route path="/journal" element={<Protected><JournalPage /></Protected>} />
       <Route path="/history/:id" element={<Protected><HistoryDetail /></Protected>} />
-      <Route path="/profile" element={<Protected><Soon title="פרופיל" /></Protected>} />
+      <Route path="/profile" element={<Protected><Profile /></Protected>} />
       <Route path="*" element={<Protected><NotFound /></Protected>} />
     </Routes>
   );

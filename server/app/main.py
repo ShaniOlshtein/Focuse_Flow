@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import config
 from .db import ensure_indexes
-from .routes import auth, content, sessions, users
+from .routes import auth, content, insights, sessions, users
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Bloom API", version="1.0.0")
@@ -56,5 +56,5 @@ async def health():
     return {"status": "ok"}
 
 
-for r in (auth.router, users.router, content.router, sessions.router):
+for r in (auth.router, users.router, content.router, sessions.router, insights.router):
     app.include_router(r, prefix="/api")

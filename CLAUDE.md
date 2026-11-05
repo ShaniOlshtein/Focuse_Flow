@@ -20,7 +20,7 @@ browser (it never reads the code), plus a virtual webcam (OBS) playing videos of
 ```
 AUTHORS (grunitech emails, comma-separated, no spaces) = "<<< shani.olshtein@grunitech.com-michal.david@grunitech.com-ahuva.fogel@grunitech.com >>>"
 MEMBERS (full names, for the Assignment 4 JSON)        = "<<< Shani Olshtein ,Michal David ,Ahuva Fogel >>>"
-TEAM\\\_ID (submission name for A4: english, lowercase, no spaces, e.g. bloom-garden) = "shani-michal-ahuva"
+TEAM\\\_ID (submission name for A4: english, lowercase, no spaces, e.g. bloom-garden) = "ahuva-shani-michal"
 GCP\\\_PROJECT\\\_ID (the Google Cloud project id, created in the GCP console)     = "<<< fill later >>>"
 ```
 

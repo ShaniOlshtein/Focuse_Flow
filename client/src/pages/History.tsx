@@ -4,6 +4,8 @@ import { api, ApiError, fmtDate } from "../api";
 import { NotFound } from "../App";
 import { scoreColor } from "../focus/engine";
 import { ScoreChart } from "../focus/widgets";
+import Plant, { flowerColor, Species, SPECIES_NAME, STAGE_NAME } from "../bloom/Plant";
+import { AttentionStrip } from "../bloom/AttentionStrip";
 
 export type SessionSummary = {
   id: string;
@@ -15,6 +17,11 @@ export type SessionSummary = {
   ended_at: string | null;
   reading_count: number;
   average_score: number | null;
+  species: Species;
+  level: number;
+  stage: string;
+  blooms: number;
+  focused_seconds: number;
 };
 type Reading = { score: number; position: number; created_at: string; attention?: number[] };
 type SessionDetail = SessionSummary & { readings: Reading[] };
@@ -37,7 +44,7 @@ export function HistoryList() {
 
   return (
     <section className="card">
-      <h1>היסטוריה</h1>
+      <h2>היסטוריה — כל הסשנים</h2>
       {error && <p className="alert error">{error}</p>}
       {items === null ? (
         <p className="muted">טוען…</p>
@@ -98,12 +105,28 @@ export function HistoryDetail() {
             {fmtDate(s.started_at)} · {duration(s)} · {s.reading_count} מדידות · ממוצע <Avg v={s.average_score} />
           </p>
         </div>
-        <Link className="btn ghost" to="/history">חזרה להיסטוריה</Link>
+        <Link className="btn ghost" to="/history">חזרה לגינה</Link>
       </div>
+      <section className="card plant-hero">
+        <Plant level={s.level} species={s.species} color={flowerColor(s.average_score)} mood="still" size={110} />
+        <div>
+          <h2>{SPECIES_NAME[s.species]} · {STAGE_NAME[s.stage]}</h2>
+          <p>{Math.round(s.focused_seconds / 60)} דקות מרוכזות{s.blooms > 0 ? ` · פרח ${s.blooms} פעמים 🌼` : ""}{s.bed ? ` · ערוגה: ${s.bed}` : ""}</p>
+        </div>
+      </section>
       <section className="card">
         <h2>ציון לאורך הזמן</h2>
         <ScoreChart points={s.readings.map((r) => r.score)} labels={s.readings.map((r) => fmtPos(r, s.content_type))} />
       </section>
+      {s.readings.some((r) => r.attention) && (
+        <section className="card">
+          <h2>אילו שניות נחשבו הכי הרבה?</h2>
+          <p className="muted small">כל שורה = מדידה אחת; כל משבצת = פריים מתוך 10 השניות שהמודל ראה (ימין = מוקדם). כהה = משקל קשב גבוה.</p>
+          <div className="strips">
+            {s.readings.filter((r) => r.attention).slice(-20).map((r, i) => <AttentionStrip key={i} weights={r.attention!} height={10} />)}
+          </div>
+        </section>
+      )}
       <section className="card">
         <h2>מדידות</h2>
         {s.readings.length === 0 ? (
