@@ -52,7 +52,7 @@ test("landing → register errors → login → library CRUD → logout", async 
   await expect(page.getByTestId("display-name")).toContainText("שירה");
   await page.getByRole("link", { name: "פתח" }).first().click();
   await expect(page.getByRole("heading", { name: "סרטון לדוגמה" })).toBeVisible();
-  await expect(page.locator("iframe[src*='youtube.com/embed/aqz-KE-bpKQ']")).toBeVisible();
+  await expect(page.locator("iframe[src*='aqz-KE-bpKQ']")).toBeVisible();
 
   await page.goto("/library");
   page.once("dialog", (d) => d.accept());

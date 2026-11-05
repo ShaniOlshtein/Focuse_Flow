@@ -11,3 +11,6 @@ e2e/playwright-report/
 e2e/media/*.y4m
 assignment3.zip
 client/certs/*.crt
+client/public/mediapipe/wasm/
+client/public/ort/
+*.jpg

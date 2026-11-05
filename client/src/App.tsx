@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Library from "./pages/Library";
 import ContentView from "./pages/ContentView";
+import { HistoryDetail, HistoryList } from "./pages/History";
 
 export function Logo() {
   return (
@@ -85,7 +86,8 @@ export default function App() {
       <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
       <Route path="/library" element={<Protected><Library /></Protected>} />
       <Route path="/content/:id" element={<Protected><ContentView /></Protected>} />
-      <Route path="/history" element={<Protected><Soon title="היסטוריה" /></Protected>} />
+      <Route path="/history" element={<Protected><HistoryList /></Protected>} />
+      <Route path="/history/:id" element={<Protected><HistoryDetail /></Protected>} />
       <Route path="/profile" element={<Protected><Soon title="פרופיל" /></Protected>} />
       <Route path="*" element={<Protected><NotFound /></Protected>} />
     </Routes>
