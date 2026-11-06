@@ -19,6 +19,7 @@ export type SessionSummary = {
   average_score: number | null;
   species: Species;
   level: number;
+  level_exact: number;
   stage: string;
   blooms: number;
   focused_seconds: number;
@@ -108,7 +109,7 @@ export function HistoryDetail() {
         <Link className="btn ghost" to="/history">חזרה לגינה</Link>
       </div>
       <section className="card plant-hero">
-        <Plant level={s.level} species={s.species} color={flowerColor(s.average_score)} mood="still" size={110} />
+        <Plant level={s.level_exact ?? s.level} species={s.species} color={flowerColor(s.average_score)} mood="still" size={110} />
         <div>
           <h2>{SPECIES_NAME[s.species]} · {STAGE_NAME[s.stage]}</h2>
           <p>{Math.round(s.focused_seconds / 60)} דקות מרוכזות{s.blooms > 0 ? ` · פרח ${s.blooms} פעמים 🌼` : ""}{s.bed ? ` · ערוגה: ${s.bed}` : ""}</p>

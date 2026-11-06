@@ -90,7 +90,7 @@ async def end(session_id: str, user: dict = Depends(current_user)):
         s = await get_session(session_id, user)
     out = summary(s)
     return {k: out[k] for k in ("id", "started_at", "ended_at", "reading_count", "average_score",
-                                "focused_seconds", "level", "stage", "blooms", "species")}
+                                "focused_seconds", "level", "level_exact", "progress", "stage", "blooms", "species")}
 
 
 @router.get("")

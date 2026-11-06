@@ -13,6 +13,7 @@ export type GardenPlant = {
   average_score: number | null;
   focused_minutes: number;
   level: number;
+  level_exact: number;
   stage: string;
   blooms: number;
 };
@@ -77,7 +78,7 @@ export default function Garden() {
                   {b.plants.map((p) => (
                     <Link key={p.session_id} to={`/history/${p.session_id}`} className="garden-plant"
                       title={`${p.title} · ${fmtDate(p.started_at)}`}>
-                      <Plant level={p.level} species={p.species} color={flowerColor(p.average_score)} mood="still"
+                      <Plant level={p.level_exact ?? p.level} species={p.species} color={flowerColor(p.average_score)} mood="still"
                         size={62 + Math.min(30, p.focused_minutes)} label={`${SPECIES_NAME[p.species]}: ${p.title}`} />
                       <span className="gp-title">{p.title}</span>
                       <span className="muted small">

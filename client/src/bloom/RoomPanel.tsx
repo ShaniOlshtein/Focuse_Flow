@@ -6,6 +6,7 @@ export type Member = {
   display_name: string;
   stage: string;
   level: number;
+  level_exact?: number;
   last_score: number | null;
   status: "focused" | "needs_cheer" | "away" | "break" | "idle";
   status_label: string;
@@ -151,7 +152,7 @@ export default function RoomPanel({ code, me, onCreated, onLeft }: {
         <ul className="buddies" aria-label="חברים בחדר">
           {others.map((m) => (
             <li key={m.display_name + m.updated_at.slice(0, 10)} className={`buddy st-${m.status}`} data-testid="buddy">
-              <Plant level={m.level} mood={MOOD[m.status]} size={64} label={`הצמח של ${m.display_name}`} />
+              <Plant level={m.level_exact ?? m.level} mood={MOOD[m.status]} size={64} label={`הצמח של ${m.display_name}`} />
               <div className="buddy-info">
                 <strong>{m.display_name}</strong>
                 <span className="buddy-status" data-testid="buddy-status">{m.status_label}</span>

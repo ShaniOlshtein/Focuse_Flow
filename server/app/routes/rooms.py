@@ -76,6 +76,7 @@ def room_out(room: dict, user: dict) -> dict:
     for m in room["members"]:
         key, label = status_of(m)
         members.append({"display_name": m["display_name"], "stage": m["stage"], "level": m["level"],
+                        "level_exact": m.get("level_exact", m["level"]),
                         "last_score": m["last_score"], "status": key, "status_label": label,
                         "updated_at": iso(m["updated_at"]), "is_me": m["user_id"] == user["_id"]})
     cheers = [{"id": c["id"], "from": c["from_name"], "at": iso(c["at"])} for c in room.get("cheers", [])
@@ -164,7 +165,7 @@ async def on_reading(session: dict, focused_seconds: float, score: float):
         return
     g = growth(focused_seconds)
     t = now()
-    upd = {"members.$.level": g["level"], "members.$.stage": g["stage"], "members.$.last_score": score,
+    upd = {"members.$.level": g["level"], "members.$.level_exact": g["level_exact"], "members.$.stage": g["stage"], "members.$.last_score": score,
            "members.$.updated_at": t, "members.$.presence": "active", "last_activity": t}
     if g["level"] >= config.BLOOM_LEVEL:
         upd["members.$.bloomed"] = True

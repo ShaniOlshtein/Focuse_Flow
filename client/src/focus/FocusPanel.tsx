@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTween } from "../bloom/useTween";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../api";
 import Plant, { Mood, Species, STAGE_NAME } from "../bloom/Plant";
@@ -6,7 +7,7 @@ import { EngineStatus, FocusEngine, listCameras, Prediction, preloadModels } fro
 import { ConsentDialog, ScoreChart, ScoreMeter } from "./widgets";
 
 type Phase = "idle" | "consent" | "declined" | "running" | "break" | "ended";
-type Growth = { level: number; stage: string; blooms: number; focused_seconds: number };
+type Growth = { level: number; level_exact: number; progress: number; next_level_in: number | null; stage: string; blooms: number; focused_seconds: number };
 type EndSummary = Growth & { reading_count: number; average_score: number | null };
 
 const STATUS_TEXT: Record<EngineStatus, string> = {
@@ -20,7 +21,7 @@ const STATUS_TEXT: Record<EngineStatus, string> = {
 const LOW = 0.4;
 const THIRSTY_AFTER_MS = 15_000;
 const BREAK_SECONDS = 5 * 60;
-const ZERO: Growth = { level: 0, stage: "seed", blooms: 0, focused_seconds: 0 };
+const ZERO: Growth = { level: 0, level_exact: 0, progress: 0, next_level_in: null, stage: "seed", blooms: 0, focused_seconds: 0 };
 
 export type FocusHooks = {
   getPosition: () => number;
@@ -50,6 +51,7 @@ export default function FocusPanel(props: {
   const [autoPause, setAutoPause] = useState(() => localStorage.getItem("bloom_autopause") === "1");
   const [breakLeft, setBreakLeft] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [grew, setGrew] = useState(false);
 
   const engine = useRef<FocusEngine | null>(null);
   const sessionId = useRef<string | null>(null);
@@ -120,7 +122,13 @@ export default function FocusPanel(props: {
       body: { position, score: Number(p.score.toFixed(4)), attention: p.attention?.slice(0, 100) ?? null },
     })
       .then((g) => {
-        setGrowth(g);
+        setGrowth((prev) => {
+          if (g.level_exact > prev.level_exact + 1e-3) {
+            setGrew(true);
+            window.setTimeout(() => setGrew(false), 900);
+          }
+          return g;
+        });
         if (g.blooms > bloomsSeen.current) {
           bloomsSeen.current = g.blooms;
           startBreak();
@@ -234,8 +242,9 @@ export default function FocusPanel(props: {
     : score >= LOW ? "still"
     : "droop";
   const running = phase === "running" || phase === "break";
-  const plantLevel = phase === "ended" && summary ? summary.level : growth.level;
-  const toNext = growth.level < 12 ? Math.max(0, 120 - (growth.focused_seconds % 120)) : 0;
+  const target = phase === "ended" && summary ? summary.level_exact : growth.level_exact;
+  const plantLevel = useTween(target, 2500); // glide smoothly between readings (~3 s apart)
+  const pct = Math.round(Math.min(1, growth.progress) * 100);
 
   return (
     <section className="card session" aria-label="סשן מדידה">
@@ -243,12 +252,17 @@ export default function FocusPanel(props: {
 
       <div className="plant-stage">
         <Plant level={plantLevel} species={species} mood={running || phase === "ended" ? mood : "still"}
-          reviving={reviving} size={150} label={`הצמח שלך: ${STAGE_NAME[growth.stage] ?? "זרע"}`} />
+          reviving={reviving || grew} size={150} label={`הצמח שלך: ${STAGE_NAME[growth.stage] ?? "זרע"}`} />
         {running && (
           <p className="plant-caption" data-testid="plant-stage">
-            {STAGE_NAME[growth.stage] ?? "זרע"} · {Math.floor(growth.focused_seconds / 60)} דק׳ מרוכזות
-            {growth.level < 12 && toNext > 0 && <span className="muted small"> · עוד ~{Math.ceil(toNext / 60)} דק׳ לשלב הבא</span>}
+            {STAGE_NAME[growth.stage] ?? "זרע"} · {growth.focused_seconds < 60 ? `${Math.round(growth.focused_seconds)} שנ׳` : `${Math.floor(growth.focused_seconds / 60)} דק׳`} מרוכזות
           </p>
+        )}
+        {running && (
+          <div className="bloom-progress" aria-label={`התקדמות לפריחה: ${pct}%`} data-testid="bloom-progress">
+            <div className="bar small-bar"><div className="bar-fill" style={{ width: `${pct}%`, background: "var(--leaf-2)" }} /></div>
+            <span className="muted small">לפריחה: {pct}%{grew ? " 🌱+" : ""}</span>
+          </div>
         )}
       </div>
 

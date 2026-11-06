@@ -25,7 +25,7 @@ test("live plant, low-focus reaction, garden, journal, profile", async ({ page, 
   await page.getByRole("button", { name: "התחל סשן" }).click();
   await page.getByRole("button", { name: "אני מסכים" }).click();
   await expect(page.getByTestId("score")).toHaveText(/\d\.\d\d/, { timeout: 30_000 });
-  await expect(page.getByTestId("plant-stage")).toContainText("דק׳ מרוכזות");
+  await expect(page.getByTestId("plant-stage")).toContainText("מרוכזות");
   // score 0.2 (< 0.4) for ~15 s -> the plant gets thirsty
   await expect(page.getByTestId("thirsty")).toHaveText(/הצמח שלך צמא לריכוז/, { timeout: 30_000 });
   await page.screenshot({ path: shot("watch-thirsty"), fullPage: true });

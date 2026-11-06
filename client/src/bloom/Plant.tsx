@@ -30,27 +30,33 @@ type Props = {
   label?: string;
 };
 
+const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+
+/** level may be fractional (0..12): the plant grows continuously, not in jumps. */
 export default function Plant({ level, species = "sunflower", mood = "still", color = "#f2c14e", size = 160, reviving, label }: Props) {
-  const lv = Math.max(0, Math.min(12, Math.round(level)));
-  const stemH = lv === 0 ? 0 : 14 + lv * 6.5; // up to ~92px
+  const lv = Math.max(0, Math.min(12, level));
   const baseY = 122;
+  // stem: sprouts during the first level, then ~6.5 px per level (up to ~92 px)
+  const stemH = lv < 0.15 ? 0 : 18 * clamp01(lv) + Math.max(0, lv - 1) * 6.4;
   const topY = baseY - stemH;
   const droop = mood === "droop";
   const bend = droop ? 16 : 0; // stem bends sideways when thirsty for focus
   const topX = 60 + bend;
-  const leafPairs = lv < 1 ? 0 : Math.min(5, Math.ceil(lv / 2));
   const leafColor = mood === "sleep" ? "#93a58c" : droop ? "#9db57a" : "#6aa35c";
   const stemColor = mood === "sleep" ? "#7f9278" : "#4f7d4a";
-  const showBud = lv >= 7 && lv < 12;
+  const budGrow = clamp01((lv - 7) / 5); // bud swells from level 7 to 12
   const showFlower = lv >= 12;
   const cls = `plant mood-${mood}${reviving ? " reviving" : ""}`;
 
-  const leaves = Array.from({ length: leafPairs }, (_, i) => {
-    const t = (i + 1) / (leafPairs + 1);
-    const y = baseY - stemH * t;
+  // leaf k appears at level 1 + 2k and unfolds over ~1.5 levels
+  const leaves = Array.from({ length: 5 }, (_, i) => {
+    const grow = clamp01((lv - (0.6 + i * 1.7)) / 1.2);
+    if (grow <= 0) return null;
+    const t = 0.25 + i * 0.14;
+    const y = baseY - stemH * Math.min(0.85, t);
     const x = 60 + bend * t * t;
     const side = i % 2 === 0 ? 1 : -1;
-    const len = species === "fern" ? 22 - i * 2 : 16 - i;
+    const len = (species === "fern" ? 24 - i * 2 : 19 - i) * (0.35 + 0.65 * grow);
     const rot = droop ? side * 55 : side * 25;
     const d =
       species === "fern"
@@ -61,10 +67,11 @@ export default function Plant({ level, species = "sunflower", mood = "still", co
         transform={`translate(${x},${y}) scale(${side},1) rotate(${-Math.abs(rot) + (droop ? 70 : 0)})`} />
     );
   });
+  const cw = 7 + lv * 0.6; // cactus half width
 
   return (
     <svg className={cls} width={size} height={size * (4 / 3)} viewBox="0 0 120 160" role="img"
-      aria-label={label ?? `צמח בשלב ${lv}`}>
+      aria-label={label ?? `צמח בשלב ${Math.floor(lv)}`}>
       {/* soft sun glow behind */}
       <circle cx="60" cy="70" r="46" className="plant-glow" />
       {/* pot */}
@@ -73,33 +80,32 @@ export default function Plant({ level, species = "sunflower", mood = "still", co
       <ellipse cx="60" cy="118" rx="30" ry="3" fill="#6b4a33" opacity="0.6" />
       {/* plant body (drawn over the pot) */}
       <g className="plant-body">
-        {lv === 0 && (
-          <g className="seed">
+        {lv < 0.6 && (
+          <g className="seed" opacity={1 - clamp01((lv - 0.3) / 0.3)}>
             <ellipse cx="60" cy="109" rx="9" ry="7" fill="#d9a86c" stroke="#7a4a22" strokeWidth="1.5" />
-            <path d="M60,102 q3,-7 8,-6" stroke="#6aa35c" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+            <path d={`M60,102 q3,${-3 - lv * 12} ${4 + lv * 8},${-2 - lv * 8}`} stroke="#6aa35c" strokeWidth="2.5" fill="none" strokeLinecap="round" />
           </g>
         )}
-        {lv > 0 && species !== "cactus" && (
+        {stemH > 0 && species !== "cactus" && (
           <path d={`M60,${baseY} Q${60 + bend * 0.2},${baseY - stemH * 0.6} ${topX},${topY}`}
-            stroke={stemColor} strokeWidth={3 + lv * 0.15} fill="none" strokeLinecap="round" className="stem" />
+            stroke={stemColor} strokeWidth={2.5 + lv * 0.2} fill="none" strokeLinecap="round" className="stem" />
         )}
-        {lv > 0 && species === "cactus" && (
+        {stemH > 0 && species === "cactus" && (
           <g transform={droop ? `rotate(12 60 ${baseY})` : undefined}>
-            <rect x={60 - (7 + lv * 0.6)} y={topY} width={14 + lv * 1.2} height={stemH} rx={7 + lv * 0.6}
-              fill={leafColor} stroke={stemColor} strokeWidth="2" />
-            {lv >= 5 && (
-              <path d={`M${60 - 7 - lv * 0.6},${baseY - stemH * 0.45} h-10 v-${8 + lv} `} stroke={leafColor}
+            <rect x={60 - cw} y={topY} width={cw * 2} height={stemH} rx={cw} fill={leafColor} stroke={stemColor} strokeWidth="2" />
+            {lv >= 4 && (
+              <path d={`M${60 - cw},${baseY - stemH * 0.45} h-10 v-${(8 + lv) * clamp01(lv - 4)}`} stroke={leafColor}
                 strokeWidth="8" fill="none" strokeLinecap="round" />
             )}
-            {lv >= 8 && (
-              <path d={`M${60 + 7 + lv * 0.6},${baseY - stemH * 0.6} h10 v-${6 + lv * 0.8}`} stroke={leafColor}
+            {lv >= 7 && (
+              <path d={`M${60 + cw},${baseY - stemH * 0.6} h10 v-${(6 + lv * 0.8) * clamp01(lv - 7)}`} stroke={leafColor}
                 strokeWidth="7" fill="none" strokeLinecap="round" />
             )}
           </g>
         )}
         {species !== "cactus" && leaves}
-        {showBud && (
-          <ellipse cx={topX} cy={topY - 4} rx={3 + (lv - 7) * 0.8} ry={5 + (lv - 7) * 1.1} fill={color}
+        {budGrow > 0 && !showFlower && (
+          <ellipse cx={topX} cy={topY - 4} rx={2.5 + budGrow * 4.5} ry={4 + budGrow * 6} fill={color}
             stroke={stemColor} strokeWidth="1.5" className="bud" />
         )}
         {showFlower && (
