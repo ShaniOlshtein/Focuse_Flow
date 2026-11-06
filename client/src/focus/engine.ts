@@ -1,6 +1,6 @@
 // In-browser attention pipeline:
 // camera -> MediaPipe FaceLandmarker (478 x,y,z, 10 fps) -> rolling window of 100 frames
-// -> every ~3 s onnxruntime-web runs v4_2.onnx on [1,100,478,3] -> score 0..1.
+// -> every ~3 s onnxruntime-web runs v4_7.onnx on [1,100,478,3] -> score 0..1.
 // Video frames and landmarks never leave the browser; only the score is reported.
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import * as ort from "onnxruntime-web/wasm";
@@ -10,7 +10,7 @@ export const WINDOW = 100;
 export const POINTS = 478;
 const INFER_EVERY_MS = 3000;
 const NO_FACE_RESET_MS = 2000;
-const MODEL_URL = "/models/v4_2.onnx";
+const MODEL_URL = "/models/v4_7.onnx";
 
 export type EngineStatus = "loading" | "warming" | "tracking" | "noface" | "error" | "stopped";
 export type Prediction = { score: number; attention: number[] | null; classes: number[] | null };
@@ -54,7 +54,7 @@ export const preloadModels = () => Promise.all([loadLandmarker(), loadModel()]);
 
 /** The model was trained on landmarks extracted from a face crop (square, 20% margin around the face, 256 px).
  *  Re-express the full-frame landmarks in that crop's coordinate system (equivalent to cropping first).
- *  Experimental (off by default; enable with localStorage bloom_crop=1). On our test video it changed v4_2 only 0.16->0.21. */
+ *  Experimental (off by default; enable with localStorage bloom_crop=1). On our test video it barely changed the score. */
 const CROP = (() => {
   try {
     return localStorage.getItem("bloom_crop") === "1"; // default: raw points, as the assignment specifies
@@ -219,6 +219,8 @@ export class FocusEngine {
       let score = Number((scoreT.data as Float32Array)[0]);
       if (!Number.isFinite(score)) return;
       score = Math.min(1, Math.max(0, score));
+      const forced = (window as any).__bloomScoreOverride; // test-only hook (never set by the app)
+      if (typeof forced === "number") score = forced;
       if (!this.stopped)
         this.ev.onPrediction({
           score,

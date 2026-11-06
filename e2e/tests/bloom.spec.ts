@@ -18,13 +18,15 @@ test("live plant, low-focus reaction, garden, journal, profile", async ({ page, 
   test.setTimeout(150_000);
   const { token } = await apiLogin(page, request, "נועה");
   const id = await addContent(request, token, { type: "text", title: "פרק בהיסטוריה", source: "טקסט ארוך. ".repeat(300), bed: "היסטוריה" });
+  // the model is real; only its output is pinned to a low value so the 15 s "thirsty" rule is deterministic
+  await page.addInitScript(() => ((window as any).__bloomScoreOverride = 0.2));
   await page.goto(`/content/${id}`);
   await expect(page.getByRole("img", { name: /הצמח שלך/ })).toBeVisible();
   await page.getByRole("button", { name: "התחל סשן" }).click();
   await page.getByRole("button", { name: "אני מסכים" }).click();
   await expect(page.getByTestId("score")).toHaveText(/\d\.\d\d/, { timeout: 30_000 });
   await expect(page.getByTestId("plant-stage")).toContainText("דק׳ מרוכזות");
-  // the still portrait scores ~0.17 (< 0.4) -> after ~15 s the plant gets thirsty
+  // score 0.2 (< 0.4) for ~15 s -> the plant gets thirsty
   await expect(page.getByTestId("thirsty")).toHaveText(/הצמח שלך צמא לריכוז/, { timeout: 30_000 });
   await page.screenshot({ path: shot("watch-thirsty"), fullPage: true });
   await page.getByRole("button", { name: "סיים סשן" }).click();

@@ -93,7 +93,7 @@ export default function JournalPage() {
       <section className="card">
         <h2>אילו שניות נחשבו הכי הרבה?</h2>
         <p className="muted small">
-          מודל v4_2 מחזיר "משקלי קשב" ל-100 הפריימים (10 שניות) שהוא רואה. כהה יותר = רגע שהשפיע יותר על הציון (ממוצע לכל סשן).
+          המודל (v4_7) מחזיר "משקלי קשב" ל-100 הפריימים (10 שניות) שהוא רואה. כהה יותר = רגע שהשפיע יותר על הציון (ממוצע לכל סשן).
         </p>
         {j.attention_strips.length === 0 ? <p className="muted">אין עדיין נתונים.</p> : j.attention_strips.map((s) => (
           <div key={s.session_id} className="strip-row">

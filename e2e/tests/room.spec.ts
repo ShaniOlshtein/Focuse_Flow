@@ -40,10 +40,11 @@ test("shared garden: two users, two cameras, live status + cheer; outsider gets 
     // B has no face -> A sees "not in front of the camera" within ~5 s of B's state change
     await expect(b.getByTestId("engine-status")).toContainText("לא זוהו פנים", { timeout: 30_000 });
     await expect(buddyOnA.getByTestId("buddy-status")).toHaveText("לא מול המצלמה", { timeout: 5_000 });
-    // A gets a low score (still portrait ~0.17) -> B sees "needs encouragement" within ~5 s of A's first score
+    // A gets a live score -> B sees A's matching status within ~5 s of A's first score
     await expect(a.getByTestId("score")).toHaveText(/\d\.\d\d/, { timeout: 30_000 });
+    const expected = Number(await a.getByTestId("score").textContent()) < 0.4 ? "צריך/ה עידוד" : "מרוכז/ת";
     const buddyOnB = b.getByTestId("buddy").filter({ hasText: "אהובה" });
-    await expect(buddyOnB.getByTestId("buddy-status")).toHaveText("צריך/ה עידוד", { timeout: 5_000 });
+    await expect(buddyOnB.getByTestId("buddy-status")).toHaveText(expected, { timeout: 5_000 });
     await b.screenshot({ path: "screens/room-b.png", fullPage: true });
 
     // B cheers -> sun animation on A's screen

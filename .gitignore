@@ -18,3 +18,4 @@ e2e/screens/
 e2e/media/*.mp4
 e2e/media/*.json
 build/
+e2e/media/restless.y4m

@@ -127,7 +127,7 @@ async def journal(tz_offset: int = Query(0, ge=-840, le=840), user: dict = Depen
               for k, v in beds.items()]
     by_bed.sort(key=lambda b: -(b["average_score"] or 0))
 
-    # attention strip: average v4_2 attention_weights per recent session ("which seconds counted most")
+    # attention strip: average model attention_weights per recent session ("which seconds counted most")
     strips = []
     for s in reversed(sessions[-6:]):
         acc, n = [0.0] * 100, 0

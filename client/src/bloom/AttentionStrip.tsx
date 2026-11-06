@@ -1,4 +1,4 @@
-/** Heat strip of v4_2 attention_weights (100 frames = 10 s). Weights are normalized 0..1 by the caller or here. */
+/** Heat strip of the model attention_weights (100 frames = 10 s). Weights are normalized 0..1 by the caller or here. */
 export function AttentionStrip({ weights, height = 18 }: { weights: number[]; height?: number }) {
   const max = Math.max(...weights, 1e-9);
   return (
