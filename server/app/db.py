@@ -15,3 +15,7 @@ async def ensure_indexes() -> None:
     await db.token_denylist.create_index("jti", unique=True)
     await db.login_failures.create_index("created_at", expireAfterSeconds=15 * 60)
     await db.login_failures.create_index("key")
+    await db.rooms.create_index("code", unique=True)
+    await db.rooms.create_index("members.user_id")
+    await db.rooms.create_index("last_activity", expireAfterSeconds=4 * 3600)  # room expires after 4 h idle
+    await db.shared_plants.create_index("user_ids")

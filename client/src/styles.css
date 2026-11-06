@@ -226,3 +226,22 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible { outline: 3px sol
   .garden-plant { width: 92px; }
   .table th:nth-child(3), .table td:nth-child(3) { display: none; }
 }
+
+/* ---- shared garden ---- */
+.side { min-width: 0; }
+.room { position: relative; }
+.room h2 { margin: 0; }
+.room-code { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.6rem 0; }
+.room-code input { flex: 1; min-width: 160px; font-size: 0.85rem; padding: 0.35rem 0.6rem; }
+.buddies { list-style: none; padding: 0; margin: 0.6rem 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.buddy { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.6rem; border-radius: 14px; border: 1px solid var(--line); }
+.buddy-info { display: flex; flex-direction: column; }
+.buddy-status { font-weight: 500; }
+.st-focused .buddy-status { color: var(--leaf); }
+.st-needs_cheer .buddy-status { color: var(--terra); }
+.st-away .buddy-status, .st-idle .buddy-status { color: var(--muted); }
+.sun-burst { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem;
+  background: rgba(251, 239, 204, 0.94); border-radius: var(--radius); font-weight: 700; font-size: 1.1rem; animation: fadeout 3.5s ease forwards; }
+.sun { font-size: 4rem; animation: spin 3s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeout { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }

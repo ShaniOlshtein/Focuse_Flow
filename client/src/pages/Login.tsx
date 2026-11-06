@@ -18,7 +18,9 @@ export default function Login() {
     setBusy(true);
     try {
       await login(email.trim(), password);
-      nav(loc.state?.from ?? "/library", { replace: true });
+      const from = loc.state?.from ?? sessionStorage.getItem("bloom_from") ?? "/library";
+      sessionStorage.removeItem("bloom_from");
+      nav(from, { replace: true });
     } catch (err) {
       setError((err as Error).message);
     } finally {

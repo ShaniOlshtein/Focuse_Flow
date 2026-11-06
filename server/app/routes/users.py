@@ -50,5 +50,7 @@ async def delete_me(user: dict = Depends(current_user)):
     uid = user["_id"]
     for coll in ("readings", "sessions", "content"):
         await db[coll].delete_many({"user_id": uid})
+    await db.rooms.update_many({"members.user_id": uid}, {"$pull": {"members": {"user_id": uid}}})
+    await db.shared_plants.update_many({"user_ids": uid}, {"$pull": {"user_ids": uid}})
     await db.users.delete_one({"_id": uid})
     return Response(status_code=204)

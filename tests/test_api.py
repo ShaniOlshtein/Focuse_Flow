@@ -128,3 +128,69 @@ def test_growth_garden_journal_badges():
     b = requests.get(f"{BASE}/api/badges", headers=h).json()
     assert b["season"]["name"] and any(x["id"] == "first_seed" and x["earned"] for x in b["badges"])
     assert requests.get(f"{BASE}/api/garden").status_code == 401
+
+
+def _session(h, title="חדר"):
+    cid = requests.post(f"{BASE}/api/content", json={"type": "text", "title": title, "source": "abc"}, headers=h).json()["id"]
+    return cid
+
+
+def test_rooms_membership_status_cheer_and_limits():
+    _, a = new_user()
+    _, b = new_user()
+    _, c = new_user()
+    room = requests.post(f"{BASE}/api/rooms", json={}, headers=a)
+    assert room.status_code == 201
+    code = room.json()["code"]
+    assert len(code) == 6 and room.json()["link"] == f"/room/{code}"
+    # not a member -> 404 everywhere
+    assert requests.get(f"{BASE}/api/rooms/{code}", headers=b).status_code == 404
+    assert requests.post(f"{BASE}/api/rooms/{code}/cheer", headers=c).status_code == 404
+    assert requests.post(f"{BASE}/api/sessions", json={"content_id": _session(c), "room_code": code}, headers=c).status_code == 404
+    assert requests.post(f"{BASE}/api/rooms/{code}/join", json={}, headers=b).status_code == 422  # consent required
+    assert requests.post(f"{BASE}/api/rooms/ZZZZZZ/join", json={"consent": True}, headers=b).status_code == 404
+    assert requests.post(f"{BASE}/api/rooms/{code.lower()}/join", json={"consent": True}, headers=b).status_code == 200
+    # B studies inside the room; the server updates B's member state from readings
+    sid = requests.post(f"{BASE}/api/sessions", json={"content_id": _session(b), "room_code": code}, headers=b).json()["id"]
+    requests.post(f"{BASE}/api/sessions/{sid}/readings", json={"position": 1, "score": 0.2}, headers=b)
+    view = requests.get(f"{BASE}/api/rooms/{code}", headers=a).json()
+    mb = [m for m in view["members"] if not m["is_me"]][0]
+    assert mb["status"] == "needs_cheer" and mb["last_score"] == 0.2 and set(mb) >= {"display_name", "stage", "updated_at"}
+    assert "user_id" not in str(view) and "email" not in str(view)
+    requests.post(f"{BASE}/api/rooms/{code}/presence", json={"state": "break"}, headers=b)
+    assert [m for m in requests.get(f"{BASE}/api/rooms/{code}", headers=a).json()["members"] if not m["is_me"]][0]["status"] == "break"
+    # cheer from A reaches B only
+    assert requests.post(f"{BASE}/api/rooms/{code}/cheer", headers=a).json()["sent"] == 1
+    assert requests.post(f"{BASE}/api/rooms/{code}/cheer", headers=a).status_code == 429
+    assert len(requests.get(f"{BASE}/api/rooms/{code}", headers=b).json()["cheers"]) == 1
+    assert requests.get(f"{BASE}/api/rooms/{code}", headers=a).json()["cheers"] == []
+    # max 4 members
+    for _ in range(2):
+        _, x = new_user()
+        assert requests.post(f"{BASE}/api/rooms/{code}/join", json={"consent": True}, headers=x).status_code == 200
+    assert requests.post(f"{BASE}/api/rooms/{code}/join", json={"consent": True}, headers=c).status_code == 409
+    # leave
+    assert requests.post(f"{BASE}/api/rooms/{code}/leave", headers=b).status_code == 204
+    assert requests.get(f"{BASE}/api/rooms/{code}", headers=b).status_code == 404
+
+
+def test_shared_bloom_when_fast_growth():
+    """Needs the server started with BLOOM_STEP_SECONDS=0.3 (full bloom after ~3.6 focused seconds)."""
+    import time
+    import pytest
+    if os.getenv("BLOOM_FAST") != "1":
+        pytest.skip("run with BLOOM_FAST=1 against a server with BLOOM_STEP_SECONDS=0.3")
+    _, a = new_user()
+    _, b = new_user()
+    code = requests.post(f"{BASE}/api/rooms", json={}, headers=a).json()["code"]
+    requests.post(f"{BASE}/api/rooms/{code}/join", json={"consent": True}, headers=b)
+    sids = [requests.post(f"{BASE}/api/sessions", json={"content_id": _session(h), "room_code": code}, headers=h).json()["id"] for h in (a, b)]
+    for _ in range(5):
+        time.sleep(1.0)
+        for h, sid in zip((a, b), sids):
+            r = requests.post(f"{BASE}/api/sessions/{sid}/readings", json={"position": 1, "score": 0.95}, headers=h).json()
+    assert r["stage"] == "flower" and r["blooms"] >= 1
+    assert requests.get(f"{BASE}/api/rooms/{code}", headers=a).json()["shared_bloom"] is True
+    for h in (a, b):
+        assert len(requests.get(f"{BASE}/api/garden", headers=h).json()["shared_plants"]) == 1
+        assert any(x["id"] == "bloomed_together" and x["earned"] for x in requests.get(f"{BASE}/api/badges", headers=h).json()["badges"])

@@ -21,6 +21,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # ---- Bloom growth rules (server is the source of truth for plant stage) ----
 FOCUS_THRESHOLD = 0.5          # score >= this counts as focused time
-STEP_SECONDS = int(os.getenv("BLOOM_STEP_SECONDS", "120"))  # one growth step per ~2 focused minutes
+STEP_SECONDS = float(os.getenv("BLOOM_STEP_SECONDS", "120"))  # one growth step per ~2 focused minutes
 BLOOM_LEVEL = 12               # 12 steps (~24-25 focused minutes) = full bloom -> earned break
 MAX_READING_GAP = 6            # seconds a single reading may account for

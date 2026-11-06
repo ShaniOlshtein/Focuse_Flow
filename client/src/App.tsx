@@ -10,6 +10,7 @@ import { HistoryDetail } from "./pages/History";
 import Garden from "./pages/Garden";
 import JournalPage from "./pages/Journal";
 import Profile from "./pages/Profile";
+import RoomJoin from "./pages/RoomJoin";
 
 export function Logo() {
   return (
@@ -55,7 +56,10 @@ function Protected({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const loc = useLocation();
   if (loading) return <div className="center muted">טוען…</div>;
-  if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+  if (!user) {
+    sessionStorage.setItem("bloom_from", loc.pathname + loc.search); // come back here after login/registration
+    return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
+  }
   return <Shell>{children}</Shell>;
 }
 
@@ -87,6 +91,7 @@ export default function App() {
       <Route path="/journal" element={<Protected><JournalPage /></Protected>} />
       <Route path="/history/:id" element={<Protected><HistoryDetail /></Protected>} />
       <Route path="/profile" element={<Protected><Profile /></Protected>} />
+      <Route path="/room/:code" element={<Protected><RoomJoin /></Protected>} />
       <Route path="*" element={<Protected><NotFound /></Protected>} />
     </Routes>
   );

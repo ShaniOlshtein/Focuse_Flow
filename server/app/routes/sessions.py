@@ -7,6 +7,7 @@ from ..growth import SPECIES, growth
 from ..security import current_user
 from ..utils import iso, now, oid
 from .content import get_owned
+from .rooms import norm as norm_room, on_reading
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -40,9 +41,14 @@ async def get_session(session_id: str, user: dict) -> dict:
 @router.post("", status_code=201)
 async def start(body: SessionIn, user: dict = Depends(current_user)):
     c = await get_owned(body.content_id, user)
+    room_code = None
+    if body.room_code:  # may only study inside a room you are a member of
+        room_code = norm_room(body.room_code)
+        if not await db.rooms.find_one({"code": room_code, "members.user_id": user["_id"]}):
+            raise HTTPException(404, "החדר לא נמצא או שאינך חבר/ה בו")
     doc = {"user_id": user["_id"], "content_id": c["_id"], "content_title": c["title"], "content_type": c["type"],
            "bed": c.get("bed"), "started_at": now(), "ended_at": None, "reading_count": 0, "score_sum": 0.0,
-           "average_score": None, "room_code": body.room_code, "focused_seconds": 0.0, "last_reading_at": None}
+           "average_score": None, "room_code": room_code, "focused_seconds": 0.0, "last_reading_at": None}
     res = await db.sessions.insert_one(doc)
     return {"id": str(res.inserted_id), "content_id": str(c["_id"]), "started_at": iso(doc["started_at"])}
 
@@ -68,6 +74,7 @@ async def add_reading(session_id: str, body: ReadingIn, user: dict = Depends(cur
     if body.attention:
         r["attention"] = [round(float(x), 5) for x in body.attention]
     await db.readings.insert_one(r)
+    await on_reading(upd, upd.get("focused_seconds", 0), body.score)
     return {"position": r["position"], "score": r["score"], "created_at": iso(r["created_at"]),
             **growth(upd.get("focused_seconds", 0))}
 

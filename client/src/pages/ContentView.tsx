@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import RoomPanel from "../bloom/RoomPanel";
+import { EngineStatus } from "../focus/engine";
 import { api, ApiError, Content, TYPE_LABEL } from "../api";
 import { NotFound } from "../App";
 import FocusPanel from "../focus/FocusPanel";
@@ -16,6 +18,20 @@ export default function ContentView() {
   const player = useRef<PlayerHandle>(null);
   const reader = useRef<HTMLElement>(null);
   const openedAt = useRef(Date.now());
+  const [params, setParams] = useSearchParams();
+  const [room, setRoom] = useState<string | null>(() => params.get("room") ?? sessionStorage.getItem("bloom_room"));
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [live, setLive] = useState<{ status: EngineStatus; onBreak: boolean }>({ status: "loading", onBreak: false });
+  const enterRoom = (code: string) => {
+    sessionStorage.setItem("bloom_room", code);
+    setRoom(code);
+    setParams({ room: code }, { replace: true });
+  };
+  const leaveRoom = () => {
+    sessionStorage.removeItem("bloom_room");
+    setRoom(null);
+    setParams({}, { replace: true });
+  };
 
   useEffect(() => {
     setStatus("loading");
@@ -77,8 +93,15 @@ export default function ContentView() {
             </>
           )}
         </section>
-        <FocusPanel contentId={item.id} species={SPECIES[item.type]}
-          hooks={{ getPosition, pause: item.type === "youtube" ? () => player.current?.pause() : undefined }} />
+        <div className="stack side">
+          <FocusPanel contentId={item.id} species={SPECIES[item.type]} roomCode={room} onSession={setSessionId}
+            hooks={{
+              getPosition,
+              pause: item.type === "youtube" ? () => player.current?.pause() : undefined,
+              onUpdate: (u) => setLive((p) => (p.status === u.status && p.onBreak === u.onBreak ? p : { status: u.status, onBreak: u.onBreak })),
+            }} />
+          <RoomPanel code={room} me={{ sessionId, status: live.status, onBreak: live.onBreak }} onCreated={enterRoom} onLeft={leaveRoom} />
+        </div>
       </div>
     </div>
   );

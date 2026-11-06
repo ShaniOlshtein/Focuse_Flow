@@ -17,7 +17,7 @@ export type GardenPlant = {
   blooms: number;
 };
 type Bed = { name: string; plants: GardenPlant[]; focused_minutes: number; average_score: number | null };
-type GardenData = { beds: Bed[]; total_plants: number; flowers: number };
+type GardenData = { beds: Bed[]; total_plants: number; flowers: number; shared_plants: { room_code: string; names: string[]; created_at: string }[] };
 type Season = { key: string; name: string; emoji: string };
 
 export default function Garden() {
@@ -51,6 +51,20 @@ export default function Garden() {
             <p className="garden-stats">
               🌱 {data.total_plants} צמחים · 🌼 {data.flowers} פרחו
             </p>
+            {data.shared_plants.length > 0 && (
+              <div className="bed" aria-label="ערוגה משותפת">
+                <div className="bed-head"><h2>🤝 פרחנו ביחד</h2></div>
+                <div className="bed-soil">
+                  {data.shared_plants.map((p) => (
+                    <div key={p.room_code} className="garden-plant" title={p.names.join(" + ")}>
+                      <Plant level={12} species="sunflower" color="#f7a8c4" mood="grow" size={80} label={`צמח משותף: ${p.names.join(" ו-")}`} />
+                      <span className="gp-title">{p.names.join(" + ")}</span>
+                      <span className="muted small">{fmtDate(p.created_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {data.beds.map((b) => (
               <div key={b.name} className="bed" aria-label={`ערוגה ${b.name}`}>
                 <div className="bed-head">

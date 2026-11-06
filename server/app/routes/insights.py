@@ -9,6 +9,7 @@ from ..db import db
 from ..growth import SPECIES, growth
 from ..security import current_user
 from ..utils import iso, now
+from .rooms import shared_plants_for
 
 router = APIRouter(tags=["bloom"])
 NO_BED = "ללא ערוגה"
@@ -63,7 +64,8 @@ async def garden(user: dict = Depends(current_user)):
         b["plants"].reverse()  # newest first
         out.append(b)
     out.sort(key=lambda b: (b["name"] == NO_BED, -b["focused_minutes"]))
-    return {"beds": out, "total_plants": len(plants), "flowers": sum(1 for p in plants if p["blooms"] > 0)}
+    return {"beds": out, "total_plants": len(plants), "flowers": sum(1 for p in plants if p["blooms"] > 0),
+            "shared_plants": await shared_plants_for(user)}
 
 
 def tips(minutes_by_day: list[dict], best_hour, by_bed: list[dict], streak: int, recent_avg, sessions: int) -> list[str]:
