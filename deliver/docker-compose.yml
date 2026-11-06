@@ -1,0 +1,41 @@
+# Bloom / פורחים - Assignment 3. Public linux/amd64 images, no build needed: docker compose up
+services:
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  server:
+    image: ahuvafogel/bloom-server:1.0
+    platform: linux/amd64
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017}
+      DB_NAME: ${DB_NAME:-focusflow}
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  client:
+    image: ahuvafogel/bloom-client:1.0
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://server:8000
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+
+volumes:
+  mongo-data:
