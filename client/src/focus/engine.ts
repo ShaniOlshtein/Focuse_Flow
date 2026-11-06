@@ -52,6 +52,44 @@ function loadModel() {
 /** Warm both models in the background (e.g. while the consent dialog is open). */
 export const preloadModels = () => Promise.all([loadLandmarker(), loadModel()]);
 
+/** The model was trained on landmarks extracted from a face crop (square, 20% margin around the face, 256 px).
+ *  Re-express the full-frame landmarks in that crop's coordinate system (equivalent to cropping first).
+ *  Experimental (off by default; enable with localStorage bloom_crop=1). On our test video it changed v4_2 only 0.16->0.21. */
+const CROP = (() => {
+  try {
+    return localStorage.getItem("bloom_crop") === "1"; // default: raw points, as the assignment specifies
+  } catch {
+    return false;
+  }
+})();
+export function toFaceCrop(face: { x: number; y: number; z: number }[], W: number, H: number): Float32Array {
+  const f = new Float32Array(POINTS * 3);
+  if (!CROP) {
+    for (let i = 0; i < POINTS; i++) {
+      f[i * 3] = face[i].x;
+      f[i * 3 + 1] = face[i].y;
+      f[i * 3 + 2] = face[i].z;
+    }
+    return f;
+  }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (let i = 0; i < POINTS; i++) {
+    const px = face[i].x * W, py = face[i].y * H;
+    if (px < minX) minX = px;
+    if (px > maxX) maxX = px;
+    if (py < minY) minY = py;
+    if (py > maxY) maxY = py;
+  }
+  const side = Math.max(maxX - minX, maxY - minY) * 1.4; // 20% margin on each side
+  const left = (minX + maxX) / 2 - side / 2, top = (minY + maxY) / 2 - side / 2;
+  for (let i = 0; i < POINTS; i++) {
+    f[i * 3] = (face[i].x * W - left) / side;
+    f[i * 3 + 1] = (face[i].y * H - top) / side;
+    f[i * 3 + 2] = (face[i].z * W) / side; // MediaPipe z uses the image-width scale
+  }
+  return f;
+}
+
 export async function listCameras(): Promise<MediaDeviceInfo[]> {
   const devices = await navigator.mediaDevices.enumerateDevices();
   return devices.filter((d) => d.kind === "videoinput");
@@ -142,12 +180,7 @@ export class FocusEngine {
       return;
     }
     this.lastFaceAt = now;
-    const f = new Float32Array(POINTS * 3);
-    for (let i = 0; i < POINTS; i++) {
-      f[i * 3] = face[i].x;
-      f[i * 3 + 1] = face[i].y;
-      f[i * 3 + 2] = face[i].z;
-    }
+    const f = toFaceCrop(face, this.video.videoWidth || 640, this.video.videoHeight || 480);
     // keep a true 10 fps timeline even when detection is slower than 100 ms on this device:
     // repeat the latest landmarks for the ticks we missed (max 5, i.e. 0.5 s)
     const due = this.lastPushAt ? Math.min(5, Math.max(1, Math.round((now - this.lastPushAt) / (1000 / FPS)))) : 1;
@@ -174,6 +207,8 @@ export class FocusEngine {
       const data = new Float32Array(WINDOW * POINTS * 3);
       this.frames.forEach((fr, i) => data.set(fr, i * POINTS * 3));
       const input = new ort.Tensor("float32", data, [1, WINDOW, POINTS, 3]);
+      const dbg = (window as any).__bloomWindows; // debug only (set by tests)
+      if (Array.isArray(dbg)) dbg.push({ w: this.video.videoWidth, h: this.video.videoHeight, data: Array.from(data) });
       const ti = performance.now();
       const out = await session.run({ [session.inputNames[0]]: input });
       this.mark(`inference ${Math.round(performance.now() - ti)}ms`);

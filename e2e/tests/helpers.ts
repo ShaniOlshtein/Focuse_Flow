@@ -3,6 +3,7 @@ import { copyFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+export const hasMedia = (file: string) => existsSync(join(__dirname, "..", "media", file));
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
 /** Chrome can't read fake-camera files from non-ASCII paths, so copy the clip to the temp dir. */
