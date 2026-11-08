@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { PlaybackEvent, ytStateToEvent } from "./playback";
 
 /* Minimal YouTube IFrame API wrapper: gives currentTime (reading position) and pause/play. */
 declare global {
@@ -29,14 +30,25 @@ function loadApi(): Promise<any> {
 
 export type PlayerHandle = { getTime: () => number; pause: () => void; play: () => void; isPlaying: () => boolean };
 
-export default forwardRef<PlayerHandle, { videoId: string; title: string }>(function YouTubePlayer({ videoId, title }, ref) {
+type Props = {
+  videoId: string;
+  title: string;
+  onEvent?: (e: PlaybackEvent) => void; // player state changes (play/pause/buffering/ended/error/other video)
+  onFallback?: () => void; // the API script is blocked: play state can't be detected
+};
+
+export default forwardRef<PlayerHandle, Props>(function YouTubePlayer({ videoId, title, onEvent, onFallback }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const player = useRef<any>(null);
   const [fallback, setFallback] = useState(false); // API script blocked -> plain embed, position = elapsed time
   const shownAt = useRef(Date.now());
+  const cb = useRef({ onEvent, onFallback });
+  cb.current = { onEvent, onFallback };
 
   useEffect(() => {
     let cancelled = false;
+    let onOriginal = true;
+    setFallback(false);
     loadApi().then((YT) => {
       if (cancelled || !host.current) return;
       const el = document.createElement("div");
@@ -47,10 +59,29 @@ export default forwardRef<PlayerHandle, { videoId: string; title: string }>(func
         playerVars: { rel: 0, modestbranding: 1, playsinline: 1 },
         events: {
           onReady: (e: any) => e.target.getIframe()?.setAttribute("title", title),
+          onStateChange: (e: any) => {
+            // a different video in the player (e.g. a suggestion clicked) is not this session's content
+            const vid = e.target.getVideoData?.()?.video_id;
+            if (vid) {
+              const original = vid === videoId;
+              if (original !== onOriginal) {
+                onOriginal = original;
+                cb.current.onEvent?.({ type: "VIDEO_CHANGED", original, playing: e.data === 1 });
+                if (!original) return;
+              }
+              if (!original) return;
+            }
+            const ev = ytStateToEvent(Number(e.data));
+            if (ev) cb.current.onEvent?.(ev);
+          },
+          onError: () => cb.current.onEvent?.({ type: "ERROR" }),
         },
       });
     }).catch(() => {
-      if (!cancelled) setFallback(true);
+      if (!cancelled) {
+        setFallback(true);
+        cb.current.onFallback?.();
+      }
     });
     return () => {
       cancelled = true;

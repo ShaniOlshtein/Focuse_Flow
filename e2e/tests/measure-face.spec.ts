@@ -43,6 +43,13 @@ test("YouTube content: IFrame API player + measurement with video position", asy
   await expect(page.locator("iframe[src*='youtube']")).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: "התחל סשן" }).click();
   await page.getByRole("button", { name: "אני מסכים" }).click();
+  // the video has not been played: no measurement until it really plays
+  await expect(page.getByTestId("playback-status")).toHaveAttribute("data-state", "waiting_for_video");
+  await page.waitForTimeout(15_000);
+  await expect(page.getByTestId("score")).toHaveText("—");
+  // play in the real YouTube player (IFrame API reports the state change)
+  await page.frameLocator("iframe[src*='youtube']").locator(".ytp-large-play-button").click();
+  await expect(page.getByTestId("playback-status")).toHaveCount(0, { timeout: 20_000 });
   await expect(page.getByTestId("score")).toHaveText(/^(0\.\d\d|1\.00)$/, { timeout: 30_000 });
   await page.getByRole("button", { name: "סיים סשן" }).click();
   await expect(page.getByRole("status").filter({ hasText: "הסשן הסתיים" })).toContainText(/[0-9]+ מדידות · ממוצע/);

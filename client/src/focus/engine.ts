@@ -106,6 +106,9 @@ export class FocusEngine {
   private lastPushAt = 0;
   private busy = false;
   private stopped = false;
+  private active = true; // false while the content isn't playing: no sampling, no inference
+  private running = false; // camera + models ready
+  private epoch = 0; // bumps on every pause, so an inference started before it is dropped
   private status: EngineStatus = "loading";
   private mark: (m: string) => void = () => {};
 
@@ -153,13 +156,45 @@ export class FocusEngine {
     }
     mark("models ready");
     if (this.stopped) return;
+    this.running = true;
     this.setStatus("warming");
-    this.timer = window.setInterval(() => this.tick(), 1000 / FPS);
+    if (this.active) this.startTimer();
+  }
+
+  private startTimer() {
+    if (this.timer === null) this.timer = window.setInterval(() => this.tick(), 1000 / FPS);
+  }
+
+  private stopTimer() {
+    if (this.timer !== null) clearInterval(this.timer);
+    this.timer = null;
+  }
+
+  /** Pause/resume measurement without turning the camera off. The 10 s window is kept frozen, so
+      measurement continues from the same point; the next score needs a few seconds of new frames. */
+  setActive(active: boolean) {
+    if (active === this.active) return;
+    this.active = active;
+    if (!active) {
+      this.epoch++;
+      this.stopTimer();
+      return;
+    }
+    this.lastPushAt = 0; // don't back-fill the paused time with repeated frames
+    this.lastFaceAt = Date.now();
+    this.lastInferAt = Date.now();
+    if (this.running && !this.stopped) this.startTimer();
+  }
+
+  get isActive() {
+    return this.active;
   }
 
   private async tick() {
-    if (this.stopped || this.video.readyState < 2) return;
+    if (this.stopped || !this.active || this.video.readyState < 2) return;
+    const epoch = this.epoch;
     const lm = await loadLandmarker();
+    if (epoch !== this.epoch || this.stopped) return;
     let ts = performance.now();
     if (ts <= this.lastTs) ts = this.lastTs + 1;
     this.lastTs = ts;
@@ -202,6 +237,7 @@ export class FocusEngine {
 
   private async infer() {
     this.busy = true;
+    const epoch = this.epoch;
     try {
       const session = await loadModel();
       const data = new Float32Array(WINDOW * POINTS * 3);
@@ -221,7 +257,7 @@ export class FocusEngine {
       score = Math.min(1, Math.max(0, score));
       const forced = (window as any).__bloomScoreOverride; // test-only hook (never set by the app)
       if (typeof forced === "number") score = forced;
-      if (!this.stopped)
+      if (!this.stopped && this.active && epoch === this.epoch)
         this.ev.onPrediction({
           score,
           attention: attT ? Array.from(attT.data as Float32Array) : null,
@@ -242,8 +278,9 @@ export class FocusEngine {
 
   stop() {
     this.stopped = true;
-    if (this.timer !== null) clearInterval(this.timer);
-    this.timer = null;
+    this.running = false;
+    this.epoch++;
+    this.stopTimer();
     this.frames = [];
     this.releaseCamera();
     this.setStatus("stopped");

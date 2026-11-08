@@ -20,13 +20,13 @@ export function ConsentDialog({ onAgree, onDecline }: { onAgree: () => void; onD
   );
 }
 
-export function ScoreMeter({ score }: { score: number | null }) {
+export function ScoreMeter({ score, waitingText }: { score: number | null; waitingText?: string }) {
   const pct = score === null ? 0 : Math.round(score * 100);
   return (
     <div className="meter" aria-live="polite">
       <div className="meter-top">
         <span className="meter-num" data-testid="score">{score === null ? "—" : score.toFixed(2)}</span>
-        <span className="muted">{score === null ? "ממתין לציון ראשון…" : scoreLabel(score)}</span>
+        <span className="muted">{score === null ? waitingText ?? "ממתין לציון ראשון…" : scoreLabel(score)}</span>
       </div>
       <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="ציון ריכוז">
         <div className="bar-fill" style={{ width: `${pct}%`, background: score === null ? "transparent" : scoreColor(score) }} />

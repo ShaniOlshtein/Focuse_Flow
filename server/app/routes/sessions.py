@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 from .. import config
 from ..db import db
-from ..growth import SPECIES, growth
+from ..growth import SPECIES, credited_seconds, growth
 from ..security import current_user
 from ..utils import iso, now, oid
 from .content import get_owned
@@ -15,6 +15,8 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 class SessionIn(BaseModel):
     content_id: str = Field(min_length=1, max_length=64)
     room_code: str | None = Field(default=None, max_length=12)
+    # False = the video is not playing yet: no reading is accepted / no time counted until /resume
+    playing: bool = True
 
 
 class ReadingIn(BaseModel):
@@ -48,7 +50,10 @@ async def start(body: SessionIn, user: dict = Depends(current_user)):
             raise HTTPException(404, "החדר לא נמצא או שאינך חבר/ה בו")
     doc = {"user_id": user["_id"], "content_id": c["_id"], "content_title": c["title"], "content_type": c["type"],
            "bed": c.get("bed"), "started_at": now(), "ended_at": None, "reading_count": 0, "score_sum": 0.0,
-           "average_score": None, "room_code": room_code, "focused_seconds": 0.0, "last_reading_at": None}
+           "average_score": None, "room_code": room_code, "focused_seconds": 0.0, "last_reading_at": None,
+           "playing": body.playing, "active_since": None}
+    if body.playing:
+        doc["active_since"] = doc["started_at"]
     res = await db.sessions.insert_one(doc)
     return {"id": str(res.inserted_id), "content_id": str(c["_id"]), "started_at": iso(doc["started_at"])}
 
@@ -57,18 +62,21 @@ async def start(body: SessionIn, user: dict = Depends(current_user)):
 async def add_reading(session_id: str, body: ReadingIn, user: dict = Depends(current_user)):
     s = await get_session(session_id, user)
     t = now()
-    # time this reading accounts for (capped, so pauses/breaks don't count as focus)
-    prev = s.get("last_reading_at") or s["started_at"]
-    gap = min(config.MAX_READING_GAP, max(0.0, (t - prev).total_seconds()))
-    focused = gap if body.score >= config.FOCUS_THRESHOLD else 0.0
-    # atomic: only counts while the session is still open
+    if s.get("ended_at"):
+        raise HTTPException(409, "הסשן כבר הסתיים")
+    if s.get("playing") is False:
+        raise HTTPException(409, "הסרטון לא מתנגן — המדידה מושהית")
+    # time this reading accounts for: only since the video (re)started playing, capped
+    focused = credited_seconds(t, s["started_at"], s.get("last_reading_at"), s.get("active_since"), body.score)
+    # atomic: only counts while the session is still open and playing
     upd = await db.sessions.find_one_and_update(
-        {"_id": s["_id"], "ended_at": None},
+        {"_id": s["_id"], "ended_at": None, "playing": {"$ne": False}},
         {"$inc": {"reading_count": 1, "score_sum": body.score, "focused_seconds": focused},
          "$set": {"last_reading_at": t, "last_score": body.score}},
         return_document=True)
-    if upd is None:
-        raise HTTPException(409, "הסשן כבר הסתיים")
+    if upd is None:  # ended or paused between the read and the update
+        cur = await get_session(session_id, user)
+        raise HTTPException(409, "הסשן כבר הסתיים" if cur.get("ended_at") else "הסרטון לא מתנגן — המדידה מושהית")
     r = {"session_id": s["_id"], "user_id": user["_id"], "position": body.position, "score": body.score,
          "created_at": t}
     if body.attention:
@@ -77,6 +85,30 @@ async def add_reading(session_id: str, body: ReadingIn, user: dict = Depends(cur
     await on_reading(upd, upd.get("focused_seconds", 0), body.score)
     return {"position": r["position"], "score": r["score"], "created_at": iso(r["created_at"]),
             **growth(upd.get("focused_seconds", 0))}
+
+
+async def set_playing(session_id: str, user: dict, playing: bool) -> dict:
+    """Server-side record of whether the content is actually playing (YouTube). Idempotent."""
+    s = await get_session(session_id, user)
+    if s.get("ended_at"):
+        raise HTTPException(409, "הסשן כבר הסתיים")
+    if playing:  # only a real paused -> playing transition moves active_since
+        await db.sessions.update_one({"_id": s["_id"], "ended_at": None, "playing": False},
+                                     {"$set": {"playing": True, "active_since": now()}})
+    else:
+        await db.sessions.update_one({"_id": s["_id"], "ended_at": None},
+                                     {"$set": {"playing": False, "active_since": None}})
+    return {"id": str(s["_id"]), "playing": playing}
+
+
+@router.post("/{session_id}/pause")
+async def pause(session_id: str, user: dict = Depends(current_user)):
+    return await set_playing(session_id, user, False)
+
+
+@router.post("/{session_id}/resume")
+async def resume(session_id: str, user: dict = Depends(current_user)):
+    return await set_playing(session_id, user, True)
 
 
 @router.post("/{session_id}/end")

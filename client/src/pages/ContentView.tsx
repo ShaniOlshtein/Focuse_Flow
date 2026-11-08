@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import RoomPanel from "../bloom/RoomPanel";
 import { EngineStatus } from "../focus/engine";
@@ -7,6 +7,7 @@ import { NotFound } from "../App";
 import FocusPanel from "../focus/FocusPanel";
 import { Species } from "../bloom/Plant";
 import YouTubePlayer, { PlayerHandle } from "../focus/YouTubePlayer";
+import { INITIAL_PLAYBACK, reducePlayback } from "../focus/playback";
 
 const SPECIES: Record<Content["type"], Species> = { youtube: "sunflower", text: "fern", web: "cactus" };
 
@@ -21,6 +22,17 @@ export default function ContentView() {
   const [params, setParams] = useSearchParams();
   const [room, setRoom] = useState<string | null>(() => params.get("room") ?? sessionStorage.getItem("bloom_room"));
   const [sessionId, setSessionId] = useState<string | null>(null);
+  // single source of truth for the video's real state (measurement + growth depend on it)
+  const [playback, dispatchPlayback] = useReducer(reducePlayback, INITIAL_PLAYBACK);
+  const [manualPlayback, setManualPlayback] = useState(false);
+  const isVideo = item?.type === "youtube";
+  useEffect(() => {
+    if (!isVideo) return;
+    const onVis = () => dispatchPlayback({ type: document.hidden ? "TAB_HIDDEN" : "TAB_VISIBLE" });
+    onVis();
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [isVideo]);
   const [live, setLive] = useState<{ status: EngineStatus; onBreak: boolean }>({ status: "loading", onBreak: false });
   const enterRoom = (code: string) => {
     sessionStorage.setItem("bloom_room", code);
@@ -35,6 +47,8 @@ export default function ContentView() {
 
   useEffect(() => {
     setStatus("loading");
+    dispatchPlayback({ type: "SESSION_END" }); // another item: the old session's video state is gone
+    setManualPlayback(false);
     api<Content>(`/api/content/${id}`)
       .then((c) => {
         setItem(c);
@@ -77,7 +91,8 @@ export default function ContentView() {
       <div className="watch-grid">
         <section className="card viewer">
           {item.type === "youtube" && item.youtube_id && (
-            <YouTubePlayer ref={player} videoId={item.youtube_id} title={item.title} />
+            <YouTubePlayer ref={player} videoId={item.youtube_id} title={item.title}
+              onEvent={dispatchPlayback} onFallback={() => setManualPlayback(true)} />
           )}
           {item.type === "text" && (
             <article className="reading" ref={reader} tabIndex={0} aria-label="טקסט לקריאה">{item.source}</article>
@@ -95,9 +110,11 @@ export default function ContentView() {
         </section>
         <div className="stack side">
           <FocusPanel contentId={item.id} species={SPECIES[item.type]} roomCode={room} onSession={setSessionId}
+            playback={isVideo ? playback : null} onPlayback={dispatchPlayback} manualPlayback={manualPlayback}
             hooks={{
               getPosition,
               pause: item.type === "youtube" ? () => player.current?.pause() : undefined,
+              isPlaying: item.type === "youtube" ? () => !!player.current?.isPlaying() : undefined,
               onUpdate: (u) => setLive((p) => (p.status === u.status && p.onBreak === u.onBreak ? p : { status: u.status, onBreak: u.onBreak })),
             }} />
           <RoomPanel code={room} me={{ sessionId, status: live.status, onBreak: live.onBreak }} onCreated={enterRoom} onLeft={leaveRoom} />

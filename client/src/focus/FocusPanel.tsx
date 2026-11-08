@@ -5,6 +5,7 @@ import { api, ApiError } from "../api";
 import Plant, { Mood, Species, STAGE_NAME } from "../bloom/Plant";
 import { EngineStatus, FocusEngine, listCameras, Prediction, preloadModels } from "./engine";
 import { ConsentDialog, ScoreChart, ScoreMeter } from "./widgets";
+import { isMeasuring, Playback, PLAYBACK_TEXT, PlaybackEvent, TAB_HIDDEN_TEXT } from "./playback";
 
 type Phase = "idle" | "consent" | "declined" | "running" | "break" | "ended";
 type Growth = { level: number; level_exact: number; progress: number; next_level_in: number | null; stage: string; blooms: number; focused_seconds: number };
@@ -26,6 +27,7 @@ const ZERO: Growth = { level: 0, level_exact: 0, progress: 0, next_level_in: nul
 export type FocusHooks = {
   getPosition: () => number;
   pause?: () => void; // YouTube only
+  isPlaying?: () => boolean; // YouTube only: is the video playing right now
   onUpdate?: (u: { score: number | null; status: EngineStatus; growth: Growth; onBreak: boolean }) => void;
 };
 
@@ -35,8 +37,14 @@ export default function FocusPanel(props: {
   hooks: FocusHooks;
   roomCode?: string | null;
   onSession?: (id: string | null) => void;
+  /** video content only: the playback state machine (null = text/web, always measurable) */
+  playback?: Playback | null;
+  onPlayback?: (e: PlaybackEvent) => void;
+  /** the player can't report play/pause (YouTube API blocked): the user reports it */
+  manualPlayback?: boolean;
 }) {
-  const { contentId, species, hooks, roomCode } = props;
+  const { contentId, species, hooks, roomCode, playback, onPlayback, manualPlayback } = props;
+  const measuring = !playback || isMeasuring(playback);
   const [phase, setPhase] = useState<Phase>("idle");
   const [status, setStatus] = useState<EngineStatus>("loading");
   const [error, setError] = useState("");
@@ -58,8 +66,30 @@ export default function FocusPanel(props: {
   const preview = useRef<HTMLDivElement>(null);
   const lowSince = useRef<number | null>(null);
   const bloomsSeen = useRef(0);
-  const live = useRef({ hooks, autoPause, thirsty, phase });
-  live.current = { hooks, autoPause, thirsty, phase };
+  const starting = useRef(false); // guards against double clicks
+  const ending = useRef(false);
+  const serverPlaying = useRef(true); // what the server was last told for this session
+  const serverQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const live = useRef({ hooks, autoPause, thirsty, phase, measuring });
+  live.current = { hooks, autoPause, thirsty, phase, measuring };
+
+  const tellServer = (id: string, playing: boolean) => {
+    if (serverPlaying.current === playing) return;
+    serverPlaying.current = playing;
+    const path = `/api/sessions/${id}/${playing ? "resume" : "pause"}`;
+    serverQueue.current = serverQueue.current.then(() => api(path, { method: "POST" }).catch(() => {}));
+  };
+
+  // measurement + growth follow the playback state: pause the engine and tell the server
+  useEffect(() => {
+    engine.current?.setActive(measuring);
+    if (!measuring) {
+      lowSince.current = null; // paused time never counts towards "thirsty"
+      setScore(null);
+    }
+    if (sessionId.current) tellServer(sessionId.current, measuring);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measuring]);
 
   // tell the parent (and the study room) what is happening
   useEffect(() => {
@@ -97,6 +127,7 @@ export default function FocusPanel(props: {
   }, [phase]);
 
   const handlePrediction = (p: Prediction) => {
+    if (!live.current.measuring) return; // video not playing: nothing is shown, sent or grown
     setScore(p.score);
     setHistory((h) => [...h.slice(-59), p.score]);
     const now = Date.now();
@@ -135,7 +166,8 @@ export default function FocusPanel(props: {
         }
       })
       .catch((err: ApiError) => {
-        if (err.status === 409) setError("הסשן כבר הסתיים");
+        // a 409 for "paused" can only be a reading that raced a pause - dropped on purpose
+        if (err.status === 409 && err.message === "הסשן כבר הסתיים") setError(err.message);
       });
   };
 
@@ -154,6 +186,7 @@ export default function FocusPanel(props: {
       onPrediction: handlePrediction,
     });
     engine.current = e;
+    e.setActive(live.current.measuring);
     preview.current?.replaceChildren(e.previewElement);
     await e.start(deviceId);
     const cams = await listCameras().catch(() => []);
@@ -186,6 +219,9 @@ export default function FocusPanel(props: {
   };
 
   const agree = async () => {
+    if (starting.current) return;
+    starting.current = true;
+    ending.current = false;
     setError("");
     setScore(null);
     setHistory([]);
@@ -196,22 +232,33 @@ export default function FocusPanel(props: {
     lowSince.current = null;
     setStatus("loading");
     setPhase("running");
+    // video: the session starts "waiting for the video" unless it is already playing
+    const playingNow = playback ? !manualPlayback && !!hooks.isPlaying?.() : true;
+    onPlayback?.({ type: "SESSION_START", playing: playingNow });
+    const playingForServer = playback ? playingNow && !document.hidden : true;
     try {
       const s = await api<{ id: string }>("/api/sessions", {
         method: "POST",
-        body: { content_id: contentId, room_code: roomCode ?? null },
+        body: { content_id: contentId, room_code: roomCode ?? null, playing: playingForServer },
       });
       sessionId.current = s.id;
+      serverPlaying.current = playingForServer;
+      tellServer(s.id, live.current.measuring); // the video may have started/stopped meanwhile
       props.onSession?.(s.id);
       await startEngine();
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
       else setStatus("error");
+    } finally {
+      starting.current = false;
     }
   };
 
   const end = async () => {
+    if (ending.current) return;
+    ending.current = true;
     setBusy(true);
+    onPlayback?.({ type: "SESSION_END" });
     engine.current?.stop();
     engine.current = null;
     try {
@@ -219,6 +266,7 @@ export default function FocusPanel(props: {
       setPhase("ended");
     } catch (err) {
       setError((err as Error).message);
+      ending.current = false;
     } finally {
       setBusy(false);
     }
@@ -235,7 +283,7 @@ export default function FocusPanel(props: {
   };
 
   const mood: Mood =
-    phase === "break" ? "still"
+    phase === "break" || !measuring ? "still"
     : status === "noface" ? "sleep"
     : score === null ? "still"
     : score >= 0.5 ? "grow"
@@ -307,21 +355,39 @@ export default function FocusPanel(props: {
         <div className="stack">
           <div className="row between">
             <span className={`status-chip ${status}`} role="status" data-testid="engine-status">
-              {status === "noface" ? "😴 " : ""}
-              {STATUS_TEXT[status]}
+              {!measuring && (status === "warming" || status === "tracking" || status === "noface")
+                ? "⏸ המדידה מושהית"
+                : <>{status === "noface" ? "😴 " : ""}{STATUS_TEXT[status]}</>}
             </span>
             <button className="btn danger" onClick={end} disabled={busy}>
               {busy ? "מסיים…" : "סיים סשן"}
             </button>
           </div>
-          {status === "noface" && (
+          {playback && !measuring && (
+            <p className="alert warn" role="status" data-testid="playback-status" data-state={playback.state}>
+              {playback.tabHidden && playback.state === "playing" ? TAB_HIDDEN_TEXT : PLAYBACK_TEXT[playback.state]}
+            </p>
+          )}
+          {playback && manualPlayback && (
+            <div className="alert warn stack" data-testid="manual-playback">
+              <p>
+                לא הצלחנו לזהות אוטומטית אם הסרטון מתנגן 🙈 כדי שנמדוד רק בזמן הצפייה: כשתתחילו את הסרטון לחצו
+                על "התחלתי לצפות", וכשתעצרו אותו לחצו על "עצרתי" — והמדידה תיעצר גם היא.
+              </p>
+              <div className="row">
+                <button className="btn" disabled={playback.state === "playing"} onClick={() => onPlayback?.({ type: "PLAY" })}>▶ התחלתי לצפות</button>
+                <button className="btn ghost" disabled={playback.state !== "playing"} onClick={() => onPlayback?.({ type: "PAUSE" })}>⏸ עצרתי</button>
+              </div>
+            </div>
+          )}
+          {measuring && status === "noface" && (
             <p className="alert warn" role="alert">לא זוהו פנים — הצמח ישן עד שתחזרו מול המצלמה. שום דבר לא נשלח.</p>
           )}
           {thirsty && (
             <p className="alert thirsty" role="alert" data-testid="thirsty">הצמח שלך צמא לריכוז 🌱</p>
           )}
           {reviving && <p className="alert ok" role="status">הצמח התעורר! 🌿</p>}
-          <ScoreMeter score={score} />
+          <ScoreMeter score={score} waitingText={measuring ? undefined : "המדידה מושהית"} />
           {score !== null && score < LOW && !thirsty && (
             <p className="alert error" role="alert">הריכוז ירד — נסו לחזור לתוכן 🙂</p>
           )}
