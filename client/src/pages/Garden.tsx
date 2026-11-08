@@ -35,11 +35,13 @@ export default function Garden() {
   return (
     <div className="stack">
       <section className={`card garden season-${season?.key ?? "none"}`}>
-        <div className="row between">
+        <div className="garden-intro row between">
           <div>
+            <p className="garden-kicker">הפינה הירוקה שלכם</p>
             <h1>הגינה שלי</h1>
             <p className="muted">כל סשן שהסתיים נשתל כאן. גובה = דקות ריכוז, צבע הפרח = ממוצע הריכוז.</p>
           </div>
+          <div className="garden-weather" aria-hidden="true">☀️<span>🌿</span></div>
           {season && <span className="season-chip">{season.emoji} עונת {season.name}</span>}
         </div>
         {error && <p className="alert error">{error}</p>}
@@ -58,7 +60,7 @@ export default function Garden() {
                 <div className="bed-soil">
                   {data.shared_plants.map((p) => (
                     <div key={p.room_code} className="garden-plant" title={p.names.join(" + ")}>
-                      <Plant level={12} species="sunflower" color="#f7a8c4" mood="grow" size={80} label={`צמח משותף: ${p.names.join(" ו-")}`} />
+                      <Plant level={12} species="sunflower" color="#f7a8c4" mood="grow" size={80} pot={false} label={`צמח משותף: ${p.names.join(" ו-")}`} />
                       <span className="gp-title">{p.names.join(" + ")}</span>
                       <span className="muted small">{fmtDate(p.created_at)}</span>
                     </div>
@@ -69,7 +71,7 @@ export default function Garden() {
             {data.beds.map((b) => (
               <div key={b.name} className="bed" aria-label={`ערוגה ${b.name}`}>
                 <div className="bed-head">
-                  <h2>{b.name}</h2>
+                  <h2><span aria-hidden="true">🌱</span> {b.name}</h2>
                   <span className="muted small">
                     {b.focused_minutes} דק׳ מרוכזות · ממוצע {b.average_score?.toFixed(2) ?? "—"}
                   </span>
@@ -78,7 +80,7 @@ export default function Garden() {
                   {b.plants.map((p) => (
                     <Link key={p.session_id} to={`/history/${p.session_id}`} className="garden-plant"
                       title={`${p.title} · ${fmtDate(p.started_at)}`}>
-                      <Plant level={p.level_exact ?? p.level} species={p.species} color={flowerColor(p.average_score)} mood="still"
+                      <Plant level={p.level_exact ?? p.level} species={p.species} color={flowerColor(p.average_score)} mood="still" pot={false}
                         size={62 + Math.min(30, p.focused_minutes)} label={`${SPECIES_NAME[p.species]}: ${p.title}`} />
                       <span className="gp-title">{p.title}</span>
                       <span className="muted small">
